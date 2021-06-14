@@ -160,7 +160,7 @@ def df_clipfilter(df):
         df.at[i, "similarity"] = similarities[i]
         df.at[i, "NSFW"] = "UNSURE"
 
-        if nsfw_prob[0] < 19 and nsfw_prob[1] >= 4:
+        if nsfw_prob[0] < 19 and nsfw_prob[1] < 19:
             df.at[i, "NSFW"] = "UNLIKELY"
         elif nsfw_prob[0] >= 19 and nsfw_prob[1] >= 19:
             df.at[i, "NSFW"] = "NSFW"
