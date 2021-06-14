@@ -303,6 +303,8 @@ if __name__ == "__main__":
         dlparse_df = trio.run(dl_wat, parsed_data, first_sample_id)
         dlparse_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
         """
+        import pandas as pd
+        dlparse_df = pd.read_csv("save/image.csv")
         client.log("Dropping NSFW keywords")
         filtered_df, img_embeddings = df_clipfilter(dlparse_df)
         filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
