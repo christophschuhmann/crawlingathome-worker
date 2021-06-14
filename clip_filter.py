@@ -38,7 +38,7 @@ class CLIP:
 
         with torch.no_grad():
             image_features = self.model.encode_image(
-                torch.cat([x for x in images])
+                torch.cat(images)
             ).float()
             text_features = self.model.encode_text(texts).float()
 
