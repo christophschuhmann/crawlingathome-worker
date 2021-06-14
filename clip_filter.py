@@ -43,9 +43,9 @@ class CLIP:
             text_features = self.model.encode_text(texts).float()
 
         for image_feat, text_feat in zip(image_features, text_features):
-            image_feat /= image_feat.norm(dim=-1, keepdim=True)
-            text_feat /= text_feat.norm(dim=-1, keepdim=True)
             # XXX Not sure about this one
+            # image_feat /= image_feat.norm(dim=-1, keepdim=True)
+            # text_feat /= text_feat.norm(dim=-1, keepdim=True)
             similarity.append(
                 float(
                     self.cosine_similarity(
