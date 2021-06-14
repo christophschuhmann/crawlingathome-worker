@@ -11,6 +11,7 @@ import regex
 import trio
 import ujson
 from PIL import Image, ImageFile, UnidentifiedImageError
+from copy import copy
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True  # https://stackoverflow.com/a/47958486
 
@@ -152,10 +153,10 @@ def df_clipfilter(df):
     nsfw_filters = clip.filter(img_embedding, clip.categories)
     underage_filters = clip.filter(img_embedding, clip.underaged_categories)
     animal_filters = clip.filter(img_embedding, clip.animal_categories)
-    for i, (nsfw_prob, underage_prob, animal_prob) in enumerate(
-        zip(nsfw_filters, underage_filters, animal_filters)
+    tmp_embed = copy(img_embedding)
+    for i, (nsfw_prob, underage_prob, animal_prob, img_embed) in enumerate(
+        zip(nsfw_filters, underage_filters, animal_filters, tmp_embed)
     ):
-
         df.at[i, "similarity"] = similarities[i]
         df.at[i, "NSFW"] = "UNSURE"
 
@@ -171,13 +172,14 @@ def df_clipfilter(df):
             underage_prob[0] < 4
             or underage_prob[1] < 4
             or any(x in df.at[i, "TEXT"] for x in underaged_text)
-            or animal_prob > 20
+            or animal_prob[0] > 20
         )
 
         # Remove image containing underage and not similar image-alttext
         if similarities[i] < sim_threshold or is_nsfw_underaged:
-            df = df.drop(i)
-            del img_embedding[i]
+            df.drop(i, inplace=True)
+            img_embedding.remove(img_embed)
+    df.reset_index(drop=True, inplace=True)
     return df, img_embedding
 
 
