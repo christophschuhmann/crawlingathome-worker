@@ -276,6 +276,7 @@ if __name__ == "__main__":
 
     while client.jobCount() > 0:
         start = time.time()
+        """     
         if os.path.exists(output_folder):
             shutil.rmtree(output_folder)
         if os.path.exists(".tmp"):
@@ -284,14 +285,16 @@ if __name__ == "__main__":
         os.mkdir(output_folder)
         os.mkdir(img_output_folder)
         os.mkdir(".tmp")
-
+        """
+        
         client.newJob()
-        client.downloadShard()
+        # client.downloadShard()
         first_sample_id = int(client.start_id)
         last_sample_id = int(client.end_id)
         shard_of_chunk = client.shard_piece  # TODO
 
         out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
+        """
         client.log("Processing shard")
         with open("shard.wat", "r") as infile:
             parsed_data = parse_wat(infile)
@@ -299,7 +302,7 @@ if __name__ == "__main__":
         client.log("Downloading images")
         dlparse_df = trio.run(dl_wat, parsed_data, first_sample_id)
         dlparse_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
-
+        """
         client.log("Dropping NSFW keywords")
         filtered_df, img_embeddings = df_clipfilter(dlparse_df)
         filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
@@ -319,3 +322,4 @@ if __name__ == "__main__":
         # upload_gdrive(output_folder + "images.tfrecord")
         client._markjobasdone(len(filtered_df))
         print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
+        raise SystemExit
