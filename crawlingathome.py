@@ -106,6 +106,7 @@ def process_img_content(response, alt_text, license, sample_id):
 
 
 async def request_image(data, sample_id):
+    sample_id += 1
     url, alt_text, license = data
     return process_img_content(
         await session.get(url, timeout=5), alt_text, license, sample_id
@@ -281,7 +282,7 @@ async def worker_pool(workers=4, data=None):
 
             # define an async (local) task to collect results from workers
             async def send_result(func, value, portal):
-                await snd_chan.send((value, await portal.run(func, n=value)))
+                await snd_chan.send((value, await portal.run(func, data=value)))
 
             async with trio.open_nursery() as n:
 
@@ -299,13 +300,13 @@ async def worker_pool(workers=4, data=None):
         await tn.cancel()
 
 async def dl_wat(parsed_data):
+    global sample_id
     sample_id = 1
     async with worker_pool(data=parsed_data) as actor_map:
         start = time.time()
-        async with aclosing(actor_map(request_image, parsed_data, sample_id)) as results:
+        async with aclosing(actor_map(request_image, parsed_data)) as results:
             async for number, prime in results:
                 print(f"{number} is prime: {prime}")
-                sample_id += 1
         print(f"processing took {time.time() - start} seconds")
 
 if __name__ == "__main__":
