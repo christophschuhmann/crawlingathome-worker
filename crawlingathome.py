@@ -2,6 +2,7 @@ import gc
 import itertools
 import os
 import pickle
+from random import sample
 import shutil
 import time
 from contextlib import asynccontextmanager
@@ -298,11 +299,13 @@ async def worker_pool(workers=4, data=None):
         await tn.cancel()
 
 async def dl_wat(parsed_data):
+    sample_id = 1
     async with worker_pool(data=parsed_data) as actor_map:
         start = time.time()
-        async with aclosing(actor_map(request_image, parsed_data)) as results:
+        async with aclosing(actor_map(request_image, parsed_data, sample_id)) as results:
             async for number, prime in results:
                 print(f"{number} is prime: {prime}")
+                sample_id += 1
         print(f"processing took {time.time() - start} seconds")
 
 if __name__ == "__main__":
