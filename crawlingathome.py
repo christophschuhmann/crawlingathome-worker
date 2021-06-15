@@ -297,6 +297,13 @@ async def worker_pool(workers=4, data=None):
         # tear down all "workers" on pool close
         await tn.cancel()
 
+async def dl_wat(parsed_data):
+    async with worker_pool(data=parsed_data) as actor_map:
+        start = time.time()
+        async with aclosing(actor_map(request_image, parsed_data)) as results:
+            async for number, prime in results:
+                print(f"{number} is prime: {prime}")
+        print(f"processing took {time.time() - start} seconds")
 
 if __name__ == "__main__":
     import crawlingathome_client as cah
@@ -345,13 +352,7 @@ if __name__ == "__main__":
         import pandas as pd
         parsed_data = pd.read_csv("save/image.csv", index_col=0).head(100)
         cah_log("Downloading images")
-        async with worker_pool(data=parsed_data) as actor_map:
-            start = time.time()
-            async with aclosing(actor_map(request_image, parsed_data)) as results:
-                async for number, prime in results:
-                    print(f"{number} is prime: {prime}")
-            print(f"processing took {time.time() - start} seconds")
-
+        trio.run(dl_wat, parsed_data)
         raise SystemExit
 
         cah_log("Dropping NSFW keywords")
