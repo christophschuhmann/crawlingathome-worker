@@ -108,10 +108,12 @@ def process_img_content(response, alt_text, license, sample_id):
 async def request_image(data):
     sample_id = randint(0, 100000)
     url, alt_text, license = data
-    return process_img_content(
-        await session.get(url, timeout=5), alt_text, license, sample_id
-    )
-
+    try:
+        return process_img_content(
+            await session.get(url, timeout=5), alt_text, license, sample_id
+        )
+    except:
+        return
 
 def df_clipfilter(df):
     sim_threshold = 0.3
