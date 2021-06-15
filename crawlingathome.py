@@ -11,7 +11,7 @@ from glob import glob
 from typing import Callable, List
 from urllib.parse import urljoin, urlparse
 from uuid import uuid1
-
+from random import randint
 import regex
 import tractor
 import trio
@@ -105,8 +105,8 @@ def process_img_content(response, alt_text, license, sample_id):
     return [str(sample_id), out_fname, response.url, alt_text, width, height, license]
 
 
-async def request_image(data, sample_id):
-    sample_id += 1
+async def request_image(data):
+    sample_id = randint(0, 100000)
     url, alt_text, license = data
     return process_img_content(
         await session.get(url, timeout=5), alt_text, license, sample_id
@@ -337,15 +337,21 @@ if __name__ == "__main__":
         first_sample_id = int(client.start_id)
         last_sample_id = int(client.end_id)
         shard_of_chunk = client.shard_piece  # TODO
+        fd = FileData('shard.wat')
+
+        if shard_of_chunk == 0:
+            start_index = fd[0]
+        if shard_of_chunk == 1:
+            start_index = fd[ int(len(fd)*0.5) ]
+
+        lines = int(len(fd)*0.5)
 
         out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
-        """     
         cah_log("Processing shard")
         with open("shard.wat", "r") as infile:
             parsed_data = parse_wat(infile, start_index, lines)
-        """
-        import pandas as pd
-        parsed_data = pd.read_csv("save/image.csv", index_col=0).head(100)
+
+
         cah_log("Downloading images")
         trio.run(dl_wat, parsed_data)
         raise SystemExit
