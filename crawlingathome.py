@@ -321,14 +321,6 @@ if __name__ == "__main__":
 
     while client.jobCount() > 0:
         start = time.time()
-        if os.path.exists(output_folder):
-            shutil.rmtree(output_folder)
-        if os.path.exists(".tmp"):
-            shutil.rmtree(".tmp")
-
-        os.mkdir(output_folder)
-        os.mkdir(img_output_folder)
-        os.mkdir(".tmp")
 
         client.newJob()
         client.downloadShard()
