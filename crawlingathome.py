@@ -12,7 +12,8 @@ import trio
 import ujson
 from PIL import Image, ImageFile, UnidentifiedImageError
 from copy import copy
-
+import asks
+session = asks.Session(connections=64)
 ImageFile.LOAD_TRUNCATED_IMAGES = True  # https://stackoverflow.com/a/47958486
 
 
@@ -97,45 +98,30 @@ def process_img_content(response, alt_text, license, sample_id):
     return [str(sample_id), out_fname, response.url, alt_text, width, height, license]
 
 
-async def request_image(datas, start_sampleid):
-    import asks
+async def request_image(data, sample_id):
+    global processed_samples
 
-    tmp_data = []
-    session = asks.Session(connections=64)
-
-    async def _request(data, sample_id):
-        url, alt_text, license = data
-        try:
-            proces = process_img_content(
-                await session.get(url, timeout=5), alt_text, license, sample_id
-            )
-            if proces is not None:
-                tmp_data.append(proces)
-        except Exception:
-            return
-
-    async with trio.open_nursery() as n:
-        for data in datas:
-            n.start_soon(_request, data, start_sampleid)
-            start_sampleid += 1
-
-    with open(f".tmp/{uuid1()}.json", "w") as f:
-        ujson.dump(tmp_data, f)
-    gc.collect()
+    url, alt_text, license = data
+    try:
+        processed_samples.append(process_img_content(
+            await session.get(url, timeout=5), alt_text, license, sample_id
+        ))
+    except Exception:
+        return
     return
 
 
 async def dl_wat(valid_data, first_sample_id):
+    global processed_samples
     import pandas as pd
-    import tractor
 
     # Download every image available
     processed_samples = []
-    async with tractor.open_nursery() as n:
-        for i, data in enumerate(chunk_using_generators(valid_data, 65536)):
-            await n.run_in_actor(
-                request_image, datas=data, start_sampleid=i * 65536 + first_sample_id
-            )
+    sample_id = first_sample_id
+    async with trio.open_nursery() as n:
+        for data in valid_data:
+            n.start_soon(request_image, data, sample_id)
+            sample_id += 1
 
     for tmpf in glob(".tmp/*.json"):
         processed_samples.extend(ujson.load(open(tmpf)))
