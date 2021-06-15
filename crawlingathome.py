@@ -11,7 +11,6 @@ import regex
 import trio
 import ujson
 from PIL import Image, ImageFile, UnidentifiedImageError
-from copy import copy
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True  # https://stackoverflow.com/a/47958486
 
@@ -25,14 +24,78 @@ def remove_bad_chars(text):
     return regex.sub(r"\p{Cc}|\p{Cs}", "", text)
 
 
-def parse_wat(content, start, line_count):
+def imgfiles_to_embeddings(list_of_files, batch_size, model, preprocess, device):
+      if batch_size<2:
+        print("Minimal batch_size is 2 ")
+        return []
+
+      import numpy as np
+      from PIL import Image
+
+      import time
+      import torch.nn as nn
+
+      import torch
+      #import clip
+      import os
+
+      counter_samples =0
+
+      list_of_arrays_to_concat = []
+      list_of_tokenized_text_arrays =[]
+      list_of_arrays_to_concat = []
+      list_of_image_arrays =[]
+      list_of_tokenized_text_arrays =[]
+      img_embeddings= []
+
+
+      for img_path in list_of_files:
+
+        try:
+          new_image_array = preprocess(Image.open(img_path)).unsqueeze(0).to(device)
+        except:
+          new_image_array = preprocess(Image.new("RGB", (300, 300), (255, 255, 255))).unsqueeze(0).to(device)
+
+
+        if counter_samples%batch_size ==0:
+          image_array =new_image_array
+          #tokenized_text_np_array = tokenized_text_np_array_new_sample
+          counter_samples +=1
+          continue
+        else:
+          image_array =  torch.cat((image_array,new_image_array), 0)
+          counter_samples +=1
+          #print(image_array.shape)
+
+
+
+        if counter_samples%batch_size ==0:
+            with torch.no_grad():
+              image_features = model.encode_image(image_array)
+
+
+              for i in range (image_features.shape[0]):
+                  img_embeddings.append(torch.reshape(image_features[i], (1, 512)))
+                  #img_embeddings.append(image_features[i])
+                  #print(torch.reshape(image_features[i], (1, 512)) .shape)
+      with torch.no_grad():
+          image_features = model.encode_image(image_array)
+          for i in range (image_features.shape[0]):
+            img_embeddings.append(torch.reshape(image_features[i], (1, 512)))
+            #img_embeddings.append(image_features[i])
+
+      #print(len(img_embeddings))
+      #print(img_embeddings[0].shape)
+      return img_embeddings
+
+
+
+def parse_wat(content):
     import ftfy
     import pycld2 as cld2
 
     valid_data = []
-    content.seek(start)
-    for _ in range(line_count):
-        line = content.readline()
+    for line in content:
         if "IMG@" not in line:
             continue
         line_str = line.strip()
@@ -132,9 +195,9 @@ async def dl_wat(valid_data, first_sample_id):
     # Download every image available
     processed_samples = []
     async with tractor.open_nursery() as n:
-        for i, data in enumerate(chunk_using_generators(valid_data, 65536)):
+        for i, data in enumerate(chunk_using_generators(valid_data, 65356)):
             await n.run_in_actor(
-                request_image, datas=data, start_sampleid=i * 65536 + first_sample_id
+                request_image, datas=data, start_sampleid=i * 65356 + first_sample_id
             )
 
     for tmpf in glob(".tmp/*.json"):
@@ -146,44 +209,318 @@ async def dl_wat(valid_data, first_sample_id):
 
 
 def df_clipfilter(df):
-    sim_threshold = 0.3
-    underaged_text = ["teen", "kid", "child", "baby"]
-    import clip_filter
 
-    clip = clip_filter.CLIP()
-    img_embedding, similarities = clip.preprocess_images(df)
-    nsfw_filters = clip.filter(img_embedding, clip.categories)
-    underage_filters = clip.filter(img_embedding, clip.underaged_categories)
-    animal_filters = clip.filter(img_embedding, clip.animal_categories)
-    tmp_embed = copy(img_embedding)
-    for i, (nsfw_prob, underage_prob, animal_prob, img_embed) in enumerate(
-        zip(nsfw_filters, underage_filters, animal_filters, tmp_embed)
-    ):
-        df.at[i, "similarity"] = similarities[i]
-        df.at[i, "NSFW"] = "UNSURE"
+    import torch.nn as nn
 
-        if nsfw_prob[0] < 19 and nsfw_prob[1] < 19:
-            df.at[i, "NSFW"] = "UNLIKELY"
-        elif nsfw_prob[0] >= 19 and nsfw_prob[1] >= 19:
-            df.at[i, "NSFW"] = "NSFW"
+    import torch
+    import clip
+    from PIL import Image
+    import glob
+    from pathlib import Path
+    similarity_threshold = 0.3
 
-        # If image is nsfw and text is containing underaged or image is containing underage or image is containing animal
-        is_nsfw_underaged = (
-            df.at[i, "NSFW"] == "NSFW" or df.at[i, "NSFW"] == "UNSURE"
-        ) and (
-            underage_prob[0] < 4
-            or underage_prob[1] < 4
-            or any(x in df.at[i, "TEXT"] for x in underaged_text)
-            or animal_prob[0] > 20
-        )
+    img_output_folder = "save/images/"
 
-        # Remove image containing underage and not similar image-alttext
-        if similarities[i] < sim_threshold or is_nsfw_underaged:
-            df.drop(i, inplace=True)
-            img_embedding.remove(img_embed)
+    cosine_similarity = nn.CosineSimilarity(dim=1, eps=1e-6)
+
+    print ("len(df) before filtering with clip"+str(len(df)))
+
+    img_files = glob.glob(img_output_folder + "*.*")
+    img_files_ids ={}
+    img_ids_by_filepath={}
+    for img_path in img_files:
+        path = Path(img_path)
+        path.name
+        img_files_ids[path.stem]= img_path
+        img_ids_by_filepath[img_path] = path.stem
+
+
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, preprocess = clip.load("ViT-B/32", device=device)
+
+    batch_size = 128 # for GPU 512 or 1024
+    img_emb_list= imgfiles_to_embeddings(img_files, batch_size, model, preprocess, device )
+
+    image_embedding_dict = {}
+
+    c= 0
+    for path in img_files:
+        img_sample_id = img_ids_by_filepath[path]
+        image_embedding_dict[img_sample_id] = img_emb_list[c]
+
+        c +=1
+
+
+    untokenized_texts=[]
+
+    tokenized_texts=[]
+    sample_ids_tokenized_texts=[]
+
+    text_embedding_list = []
+    for row_index, row in df.iterrows():
+        untokenized_texts.append (str( df.at[row_index,'TEXT']) [:75])
+        sample_ids_tokenized_texts.append (df.at[row_index,'SAMPLE_ID'])
+        if row_index% batch_size ==0 and row_index >0:
+
+            tokenized_texts = clip.tokenize(untokenized_texts).to(device)
+            with torch.no_grad():
+              text_embeddings = model.encode_text(tokenized_texts)
+            for i in range(text_embeddings.shape[0]):
+              text_embedding_list.append(text_embeddings[i])
+
+            untokenized_texts=[]
+
+    if len(untokenized_texts)>0:
+        tokenized_texts = clip.tokenize(untokenized_texts).to(device)
+
+        with torch.no_grad():
+          text_embeddings = model.encode_text(tokenized_texts)
+        for i in range(text_embeddings.shape[0]):
+          text_embedding_list.append(text_embeddings[i])
+        untokenized_texts=[]
+
+    #### NSFW detector categories text embeddings
+
+    #0-18 /first 19 are not NSFW
+    nsfw_text_categories = ["neutral","selfie", "illustration, drawng", "toys, play, kids, children", "teddy bear, puppet", "animal, bird, mammal, insect" "fashion, clothes", "logo, commercial, ad, advertisement", "drawing, painting","anime, cartoon","comedy, fun","romance, love story","thriller, suspense, crime story","action, action movie", "horror, monster movie", "documentary", "news, journalism", "entertainment", "talk show", "porn, sex, sperm, nipples, breats, tits, boops, penis, dick, cock, clitoris, vagina, fuck, lust, horny, sexual, lick, licking",  "porn, sex, sperm, nipples", "porn, sex, sperm, penis, dick, cock", "nipples, breats, tits, boops, sexy", "penis, dick, cock", "clitoris, vagina", "sex, fuck, lust, horny, sexual, lick, licking", "porn, sex, sexy","sexy, hot","sperm, skin","lust, horny, sexual","lick, licking, body", "anime, hentai, sexy", "cartoon, sexy, sex", "hentai", "anime, sexy, breasts", "hentai"]
+
+    nsfw_text_tokenized = clip.tokenize(nsfw_text_categories).to(device)
+    nsfw_text_features =[]
+    with torch.no_grad():
+      nsfw_text_embed = model.encode_text(nsfw_text_tokenized)
+
+    for i in range(nsfw_text_embed.shape[0]):
+        nsfw_text_features.append(nsfw_text_embed[i])
+
+    listofzeros = ["-"] * len(df)
+
+    df["NSFW"]=listofzeros
+
+
+
+    #first 4 are underaged, 0-3
+    underaged_categories = ["teenager, teen", "kid, child, teenager, teen, baby or toddler, underaged, little girl, little boy", "kid, child, little girl, little boy", "baby, toddler","adult, woman, man, grownup, grown person,full-aged of legal age","full-aged, of legal age, adult","woman, man","adult, woman, man, grownup, grown person,full-aged of legal age"]
+
+
+    underaged_text_tokenized = clip.tokenize(underaged_categories).to(device)
+    underaged_text_features =[]
+    with torch.no_grad():
+      underaged_text_embed = model.encode_text(underaged_text_tokenized)
+
+    for i in range(underaged_text_embed.shape[0]):
+        underaged_text_features.append(underaged_text_embed[i])
+
+
+    #0-20 /first 21 are not animals
+    animal_categories = ["lifelss object, thing", "thing, object", "material", "furniture","wall", "house", "tree", "wood","ground","industry", "table", "bed", "tool", "dress, clothes", "door", "chair", "rock, stone", "human", "man", "woman", "man, woman", "animal","cat","dog", "cow", "pig", "goat", "sheep", "elephant", "horse", "horse, elephant, pig, dog, cat, sheep, goat, animal", "life", "wildlife"]
+
+    animal_text_tokenized = clip.tokenize(animal_categories).to(device)
+    animal_text_features =[]
+    with torch.no_grad():
+      animal_text_embed = model.encode_text(animal_text_tokenized)
+
+    for i in range(animal_text_embed.shape[0]):
+        animal_text_features.append(animal_text_embed[i])
+
+
+    # given an iterable of pairs return the key corresponding to the greatest value
+    def argmax(pairs):
+        return max(pairs, key=lambda x: x[1])[0]
+
+    # given an iterable of values return the index of the greatest value
+    def argmax_index(values):
+        return argmax(enumerate(values))
+
+
+    listofzeros = [0.0] * len(df)
+
+    df["similarity"]=listofzeros
+
+    #image_embedding_dict= {}
+    #print ("len(df)"+str(len(df)))
+
+    img_dict_counter= 0
+    #print ("len(df) before 1st for row_index, row in df.iterrows():"+str(len(df)))
+
+
+    #client.log("Dropping NSFW Keywords")
+
+
+    for row_index2, row2 in df.iterrows():
+        if str(df.at[row_index2,'TEXT']).lower().find("sex") !=-1 or str(df.at[row_index2,'TEXT']).lower().find("nude") !=-1  or  str(df.at[row_index2,'TEXT']).lower().find("sexy") !=-1 or str(df.at[row_index2,'TEXT']).lower().find("fuck") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("orgasm") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("porn") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("lesbian") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("lust") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("pussy") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("bdsm") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("titts") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("horny") !=-1   or str(df.at[row_index2,'TEXT']).lower().find("nacked") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("boops") !=-1 or str(df.at[row_index2,'TEXT']).lower().find("erotic") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("lingerie") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("penis") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("dick") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("cock") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("dig") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("clit") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("nipple") !=-1  or str(df.at[row_index2,'TEXT']).lower().find("gay") !=-1  :
+
+            if str(df.at[row_index2,'TEXT']).lower().find("teen") !=-1 or str(df.at[row_index2,'TEXT']).lower().find("kid") !=-1  or  str(df.at[row_index2,'TEXT']).lower().find("child") !=-1 or str(df.at[row_index2,'TEXT']).lower().find("baby") !=-1 :
+
+                #print(###########NSFW KEYWORD DROP##############)
+
+                #print (df.at[row_index2,'TRANSLATION']))
+                df = df.drop(row_index2)
+                continue
+
+    similarity_counter= 0
+    for row_index, row in df.iterrows():
+        try:
+
+
+            if row_index % 100 ==0:
+                pass
+                #print("row_index: "+ str(row_index))
+                #client.log(f"Removing NFSW: {row_index} / ?")
+
+            sample_id = df.at[row_index,'SAMPLE_ID']
+            index_of_row_in_list= sample_ids_tokenized_texts.index(sample_id)
+
+            if index_of_row_in_list==-1:
+                df = df.drop(row_index)
+                continue
+
+            current_text_embedding = text_embedding_list[index_of_row_in_list]
+            current_image_embedding = image_embedding_dict[str(sample_id)]
+
+            similarity= float (cosine_similarity(torch.reshape(current_text_embedding, (1, 512)) , current_image_embedding ))
+            #print(df.at[row_index,'TEXT'])
+            #print(df.at[row_index,'URL'])
+            #print("similarity:")
+
+            #print(similarity)
+            if similarity > similarity_threshold:
+                df.at[row_index,'similarity'] = similarity
+                similarity_counter +=1
+
+
+
+                #0-18 /first 19 are not NSFW
+                nsfw_text_categories = ["neutral","selfie", "illustration, drawng", "toys, play, kids, children", "teddy bear, puppet", "animal, bird, mammal, insect" "fashion, clothes", "logo, commercial, ad, advertisement", "drawing, painting","anime, cartoon","comedy, fun","romance, love story","thriller, suspense, crime story","action, action movie", "horror, monster movie", "documentary", "news, journalism", "entertainment", "talk show", "porn, sex, sperm, nipples, breats, tits, boops, penis, dick, cock, clitoris, vagina, fuck, lust, horny, sexual, lick, licking",  "porn, sex, sperm, nipples", "porn, sex, sperm, penis, dick, cock", "nipples, breats, tits, boops, sexy", "penis, dick, cock", "clitoris, vagina", "sex, fuck, lust, horny, sexual, lick, licking", "porn, sex, sexy","sexy, hot","sperm, skin","lust, horny, sexual","lick, licking, body", "anime, hentai, sexy", "cartoon, sexy, sex", "hentai", "anime, sexy, breasts", "hentai"]
+                #nsfw_text_features = model.encode_text(nsfw_text_categories)
+                similarities=[]
+
+                for i in range(len(nsfw_text_features)):
+                    similarity= float (cosine_similarity(torch.reshape(nsfw_text_features[i], (1, 512)) , current_image_embedding ))
+                    similarities.append( similarity )
+
+                #print(similarities)
+
+                argmax1= argmax_index(similarities)
+                most_likely= nsfw_text_categories[argmax1]
+                #print ("most_likely")
+                #print (most_likely)
+
+
+                nsfw_text_categories.pop(argmax_index(similarities))
+                similarities.pop(argmax_index(similarities))
+                argmax2= argmax_index(similarities)
+                second_likely = nsfw_text_categories[argmax_index(similarities)]
+
+                if argmax1 <19 and argmax2<19:
+                    df.at[row_index,'NSFW'] = "UNLIKELY"
+                elif argmax1 <19 and argmax2>=19:
+                    df.at[row_index,'NSFW'] = "UNSURE"
+                elif argmax2 <19 and argmax1>=19:
+                    df.at[row_index,'NSFW'] = "UNSURE"
+                elif argmax1 >=19 and argmax2>=19:
+                    df.at[row_index,'NSFW'] = "NSFW"
+
+
+
+                ####underaged check
+                if df.at[row_index,'NSFW'] != "UNLIKELY":
+
+                    #keyword check
+                    if str(df.at[row_index,'TEXT']).lower().find("teen") !=-1 or str(df.at[row_index,'TEXT']).lower().find("kid") !=-1  or  str(df.at[row_index,'TEXT']).lower().find("child") !=-1 or str(df.at[row_index,'TEXT']).lower().find("baby") !=-1 :
+                        df = df.drop(row_index)
+                        #print(###########NSFW KEYWORD DROP##############)
+                        #print (df.at[row_index,'TEXT']))
+                        continue
+
+                    #first 4 are underaged, 0-3
+                    underaged_categories = ["teenager, teen", "kid, child, teenager, teen, baby or toddler, underaged, little girl, little boy", "kid, child, little girl, little boy", "baby, toddler","adult, woman, man, grownup, grown person,full-aged of legal age","full-aged, of legal age, adult","woman, man","adult, woman, man, grownup, grown person,full-aged of legal age", "drawing, logo, clip art", "illustration, cartoon", "captcha, screen", "food, eating, meal, drink", "car"]
+
+                    similarities=[]
+
+                    for i in range(len(underaged_text_features)):
+                        #similarities.append( cosine_similarity([underaged_text_features[i][0]], [current_image_embedding[0][0]]) )
+
+                        similarity= float (cosine_similarity(torch.reshape(underaged_text_features[i], (1, 512)) , current_image_embedding ))
+                        similarities.append( similarity )
+
+                    argmax1= argmax_index(similarities)
+                    #print("argmax1")
+                    #print(argmax1)
+                    most_likely= underaged_categories[argmax1]
+
+                    #print ("most_likely")
+
+                    #print (most_likely)
+
+                    underaged_categories.pop(argmax_index(similarities))
+                    similarities.pop(argmax_index(similarities))
+                    argmax2= argmax_index(similarities)
+                    #print("argmax2")
+                    #print(argmax2)
+                    second_likely = underaged_categories[argmax_index(similarities)]
+                    #print(second_likely)
+                    if argmax1 <4 or argmax2 <4:
+                        #print( df.at[row_index,'URL'] )
+                        del image_embedding_dict[str(sample_id)]
+                        df = df.drop(row_index)
+
+                        #print("dropped cause NSFW and eventually underaged")
+
+                        continue
+
+
+                ####animal check
+                if df.at[row_index,'NSFW'] != "UNLIKELY":
+
+                    #0-20 /first 21 are not animals
+                    animal_categories = ["lifelss object, thing", "thing, object", "material", "furniture","wall", "house", "tree", "wood","ground","industry", "table", "bed", "tool", "dress, clothes", "door", "chair", "rock, stone", "human", "man", "woman", "man, woman", "animal","cat","dog", "cow", "pig", "goat", "sheep", "elephant", "horse", "horse, elephant, pig, dog, cat, sheep, goat, animal", "life", "wildlife"]
+
+                    similarities=[]
+
+
+                    for i in range(len(animal_text_features)):
+                        #similarities.append( cosine_similarity([animal_text_features[i][0]], [current_image_embedding[0][0]]) )
+                        similarity= float (cosine_similarity(torch.reshape(animal_text_features[i], (1, 512)) , current_image_embedding ))
+                        similarities.append( similarity )
+                    #print ("most_likely")
+
+                    #print (most_likely)
+
+                    argmax1= argmax_index(similarities)
+                    most_likely= animal_categories[argmax1]
+
+
+                    #print(second_likely)
+                    if argmax1 >20:
+
+                        del image_embedding_dict[str(sample_id)]
+
+                        df = df.drop(row_index)
+                        #print("dropped cause NSFW and eventually animal")
+
+                        continue
+
+            else:
+                del image_embedding_dict[str(sample_id)]
+                df = df.drop(row_index)
+                continue
+
+        except Exception as e:
+            #print("dropped sample: "+str(df.at[row_index,'SAMPLE_ID']))
+            print(e)
+            #print( "embedding error")
+
+            try:
+                df = df.drop(row_index)
+            except:
+                pass
+                #print("WEIRD ERROR")
+            continue
+
+
     df.reset_index(drop=True, inplace=True)
-    return df, img_embedding
-
+    return df, image_embedding_dict
 
 def df_tfrecords(df, output_fname):
     import tensorflow as tf
@@ -211,7 +548,7 @@ def df_tfrecords(df, output_fname):
             with tf.io.gfile.GFile(image_fname, "rb") as f:
                 image_data = f.read()
             example = image_to_tfexample(
-                str(df_image["SAMPLE_ID"]).encode("utf_8"),
+                df_image["SAMPLE_ID"].encode("utf_8"),
                 image_data,
                 file_type.encode("utf_8"),
                 df_image["HEIGHT"],
@@ -264,23 +601,18 @@ def upload_gdrive(output_filename):
         files=files,
     )
 
+import sys, os
 
-class FileData:
-    def __init__(self, filename):
-        self._filename = filename
-        self._line_to_position = [0]
-        self._length = 0
 
-        with open(self._filename, 'r') as f:
-            while f.readline():
-                self._line_to_position.append(f.tell())
-                self._length += 1
-    
-    def __getitem__(self, line):
-        return self._line_to_position[line]
+def suppress_stdout():
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
 
-    def __len__(self):
-        return self._length
 
 if __name__ == "__main__":
     import crawlingathome_client as cah
@@ -294,15 +626,7 @@ if __name__ == "__main__":
     output_folder = "./save/"
     csv_output_folder = output_folder
     img_output_folder = output_folder + "images/"
-
-    def cah_log(msg):
-        for _ in range(3):
-            try:
-                return client.log(msg)
-            except crawlingathome_client.errors.ServerError:
-                time.sleep(1)
-                continue
-
+    os.system("ulimit -n 120000")
     while client.jobCount() > 0:
         start = time.time()
         if os.path.exists(output_folder):
@@ -318,42 +642,40 @@ if __name__ == "__main__":
         client.downloadShard()
         first_sample_id = int(client.start_id)
         last_sample_id = int(client.end_id)
-        shard_of_chunk = client.shard_piece  # TODO
-
-        fd = FileData('shard.wat')
-
-        if shard_of_chunk == 0:
-            start_index = fd[0]
-        if shard_of_chunk == 1:
-            start_index = fd[ int(len(fd)*0.5) ]
-
-        lines = int(len(fd)*0.5)
+        shard_of_chunk = client.shard_piece # TODO
 
         out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
-        cah_log("Processing shard")
+        client.log("Processing shard")
         with open("shard.wat", "r") as infile:
-            parsed_data = parse_wat(infile, start_index, lines)
+            parsed_data = parse_wat(infile)
 
-        cah_log("Downloading images")
+        client.log("Downloading images")
         dlparse_df = trio.run(dl_wat, parsed_data, first_sample_id)
         dlparse_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
 
-        cah_log("Dropping NSFW keywords")
-        filtered_df, img_embeddings = df_clipfilter(dlparse_df)
-        filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
-        img_embeds_sampleid = {}
-        for i, img_embed_it in enumerate(img_embeddings):
-            dfid_index = filtered_df.at[i, "SAMPLE_ID"]
-            img_embeds_sampleid[str(dfid_index)] = img_embed_it
-        with open(f"{output_folder}image_embedding_dict-{out_fname}.pkl", "wb") as f:
-            pickle.dump(img_embeds_sampleid, f)
+        print(f"Downloads completed in {round(time.time() - start)} seconds")
+        print("Filtering begins")
 
-        cah_log("Saving TFRs")
+        filtered_df, img_embeddings = df_clipfilter(dlparse_df)
+        print(len(dlparse_df))
+        print(len(filtered_df))
+        f = open("log.txt", "a")
+        f.write(str(len(dlparse_df )).encode('utf_8'))
+        f.write(str(len(filtered_df)).encode('utf_8'))
+
+        filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
+        with open(f"{output_folder}image_embedding_dict-{out_fname}.pkl", "wb") as f:
+            pickle.dump(img_embeddings, f)
+
+        #client.log("Saving TFRs")
         df_tfrecords(
             filtered_df,
             f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord",
         )
         # upload_gdrive(output_folder + "image_embeddings.pkl")
         # upload_gdrive(output_folder + "images.tfrecord")
-        client._markjobasdone(len(filtered_df))
+        #client._markjobasdone(len(filtered_df))
+        #print(len(filtered_df))
         print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
+        f.write(str(time.time()-start).encode('utf_8'))
+        f.close()
