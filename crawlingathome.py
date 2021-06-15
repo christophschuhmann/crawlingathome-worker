@@ -323,7 +323,6 @@ if __name__ == "__main__":
         start = time.time()
 
         client.newJob()
-        client.downloadShard()
         first_sample_id = int(client.start_id)
         last_sample_id = int(client.end_id)
         shard_of_chunk = client.shard_piece  # TODO
