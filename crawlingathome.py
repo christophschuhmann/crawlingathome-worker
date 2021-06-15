@@ -1,19 +1,26 @@
 import gc
+import itertools
 import os
 import pickle
 import shutil
 import time
+from contextlib import asynccontextmanager
+from copy import copy
 from glob import glob
+from typing import Callable, List
 from urllib.parse import urljoin, urlparse
 from uuid import uuid1
 
 import regex
+import tractor
 import trio
 import ujson
 from PIL import Image, ImageFile, UnidentifiedImageError
-from copy import copy
+import asks
+from async_generator import aclosing
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True  # https://stackoverflow.com/a/47958486
+session = asks.Session(connections=64)
 
 
 def chunk_using_generators(lst, n):
@@ -97,51 +104,10 @@ def process_img_content(response, alt_text, license, sample_id):
     return [str(sample_id), out_fname, response.url, alt_text, width, height, license]
 
 
-async def request_image(datas, start_sampleid):
-    import asks
-
-    tmp_data = []
-    session = asks.Session(connections=64)
-
-    async def _request(data, sample_id):
-        url, alt_text, license = data
-        try:
-            proces = process_img_content(
-                await session.get(url, timeout=5), alt_text, license, sample_id
-            )
-            if proces is not None:
-                tmp_data.append(proces)
-        except Exception:
-            return
-
-    async with trio.open_nursery() as n:
-        for data in datas:
-            n.start_soon(_request, data, start_sampleid)
-            start_sampleid += 1
-
-    with open(f".tmp/{uuid1()}.json", "w") as f:
-        ujson.dump(tmp_data, f)
-    gc.collect()
-    return
-
-
-async def dl_wat(valid_data, first_sample_id):
-    import pandas as pd
-    import tractor
-
-    # Download every image available
-    processed_samples = []
-    async with tractor.open_nursery() as n:
-        for i, data in enumerate(chunk_using_generators(valid_data, 65536)):
-            await n.run_in_actor(
-                request_image, datas=data, start_sampleid=i * 65536 + first_sample_id
-            )
-
-    for tmpf in glob(".tmp/*.json"):
-        processed_samples.extend(ujson.load(open(tmpf)))
-    return pd.DataFrame(
-        processed_samples,
-        columns=["SAMPLE_ID", "PATH", "URL", "TEXT", "HEIGHT", "WIDTH", "LICENSE"],
+async def request_image(data, sample_id):
+    url, alt_text, license = data
+    return process_img_content(
+        await session.get(url, timeout=5), alt_text, license, sample_id
     )
 
 
@@ -271,16 +237,66 @@ class FileData:
         self._line_to_position = [0]
         self._length = 0
 
-        with open(self._filename, 'r') as f:
+        with open(self._filename, "r") as f:
             while f.readline():
                 self._line_to_position.append(f.tell())
                 self._length += 1
-    
+
     def __getitem__(self, line):
         return self._line_to_position[line]
 
     def __len__(self):
         return self._length
+
+
+@asynccontextmanager
+async def worker_pool(workers=4, data=None):
+    """Though it's a trivial special case for ``tractor``, the well
+    known "worker pool" seems to be the defacto "but, I want this
+    process pattern!" for most parallelism pilgrims.
+
+    Yes, the workers stay alive (and ready for work) until you close
+    the context.
+    """
+    async with tractor.open_nursery() as tn:
+
+        portals = []
+        snd_chan, recv_chan = trio.open_memory_channel(len(data))
+
+        for i in range(workers):
+
+            # this starts a new sub-actor (process + trio runtime) and
+            # stores it's "portal" for later use to "submit jobs" (ugh).
+            portals.append(
+                await tn.start_actor(
+                    f"worker_{i}",
+                    enable_modules=[__name__],
+                )
+            )
+
+        async def _map(
+            worker_func: Callable[[int], bool], sequence: List[int]
+        ) -> List[bool]:
+
+            # define an async (local) task to collect results from workers
+            async def send_result(func, value, portal):
+                await snd_chan.send((value, await portal.run(func, n=value)))
+
+            async with trio.open_nursery() as n:
+
+                for value, portal in zip(sequence, itertools.cycle(portals)):
+                    n.start_soon(send_result, worker_func, value, portal)
+
+                # deliver results as they arrive
+                for _ in range(len(sequence)):
+                    yield await recv_chan.receive()
+
+        # deliver the parallel "worker mapper" to user code
+        yield _map
+
+        # tear down all "workers" on pool close
+        await tn.cancel()
+
 
 if __name__ == "__main__":
     import crawlingathome_client as cah
@@ -320,23 +336,32 @@ if __name__ == "__main__":
         last_sample_id = int(client.end_id)
         shard_of_chunk = client.shard_piece  # TODO
 
-        fd = FileData('shard.wat')
+        fd = FileData("shard.wat")
 
         if shard_of_chunk == 0:
             start_index = fd[0]
         if shard_of_chunk == 1:
-            start_index = fd[ int(len(fd)*0.5) ]
+            start_index = fd[int(len(fd) * 0.5)]
 
-        lines = int(len(fd)*0.5)
+        lines = int(len(fd) * 0.5)
 
         out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
+        """     
         cah_log("Processing shard")
         with open("shard.wat", "r") as infile:
             parsed_data = parse_wat(infile, start_index, lines)
-
+        """
+        import pandas as pd
+        parsed_data = pd.read_csv("save/image.csv", index_col=0).head(100)
         cah_log("Downloading images")
-        dlparse_df = trio.run(dl_wat, parsed_data, first_sample_id)
-        dlparse_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
+        async with worker_pool(data=parsed_data) as actor_map:
+            start = time.time()
+            async with aclosing(actor_map(request_image, parsed_data)) as results:
+                async for number, prime in results:
+                    print(f"{number} is prime: {prime}")
+            print(f"processing took {time.time() - start} seconds")
+
+        raise SystemExit
 
         cah_log("Dropping NSFW keywords")
         filtered_df, img_embeddings = df_clipfilter(dlparse_df)
