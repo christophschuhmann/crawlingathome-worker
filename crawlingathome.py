@@ -636,8 +636,8 @@ if __name__ == "__main__":
 
     import crawlingathome_client as cah
 
-    YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Wikidepia"
-    CRAWLINGATHOME_SERVER_URL = "http://178.63.68.247:8181/"
+    YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris"
+    CRAWLINGATHOME_SERVER_URL = "http://crawlingathome.duckdns.org/"
     import logging
     logging.basicConfig(filename='out.log')
     client = cah.init(
