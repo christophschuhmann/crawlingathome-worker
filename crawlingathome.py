@@ -648,65 +648,68 @@ if __name__ == "__main__":
     img_output_folder = output_folder + "images/"
     os.system("ulimit -n 120000")
     while client.jobCount() > 0:
-        start = time.time()
-        if os.path.exists(output_folder):
-            shutil.rmtree(output_folder)
-        if os.path.exists(".tmp"):
-            shutil.rmtree(".tmp")
+        try:
+            start = time.time()
+            if os.path.exists(output_folder):
+                shutil.rmtree(output_folder)
+            if os.path.exists(".tmp"):
+                shutil.rmtree(".tmp")
 
-        os.mkdir(output_folder)
-        os.mkdir(img_output_folder)
-        os.mkdir(".tmp")
+            os.mkdir(output_folder)
+            os.mkdir(img_output_folder)
+            os.mkdir(".tmp")
 
-        client.newJob()
-        client.downloadShard()
-        first_sample_id = int(client.start_id)
-        last_sample_id = int(client.end_id)
-        shard_of_chunk = client.shard_piece  # TODO
+            client.newJob()
+            client.downloadShard()
+            first_sample_id = int(client.start_id)
+            last_sample_id = int(client.end_id)
+            shard_of_chunk = client.shard_piece  # TODO
 
 
-        fd = FileData('shard.wat')
+            fd = FileData('shard.wat')
 
-        if shard_of_chunk == 0:
-            start_index = fd[0]
-        if shard_of_chunk == 1:
-            start_index = fd[ int(len(fd)*0.5) ]
-        lines = int(len(fd)*0.5)
-        out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
-        client.log("Processing shard")
-        with open("shard.wat", "r") as infile:
-            parsed_data = parse_wat(infile, start_index, lines)
+            if shard_of_chunk == 0:
+                start_index = fd[0]
+            if shard_of_chunk == 1:
+                start_index = fd[ int(len(fd)*0.5) ]
+            lines = int(len(fd)*0.5)
+            out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
+            client.log("Processing shard")
+            with open("shard.wat", "r") as infile:
+                parsed_data = parse_wat(infile, start_index, lines)
 
-        client.log("Downloading images")
-        dlparse_df = trio.run(dl_wat, parsed_data, first_sample_id)
-        dlparse_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
+            client.log("Downloading images")
+            dlparse_df = trio.run(dl_wat, parsed_data, first_sample_id)
+            dlparse_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
 
-        print(f"Downloads completed in {round(time.time() - start)} seconds")
-        logging.info("DL completed {a}".format(a=  round(time.time() - start)))
-        print("Filtering begins")
+            print(f"Downloads completed in {round(time.time() - start)} seconds")
+            logging.info("DL completed {a}".format(a=  round(time.time() - start)))
+            print("Filtering begins")
 
-        filtered_df, img_embeddings = df_clipfilter(dlparse_df)
-        print(len(dlparse_df))
-        print(len(filtered_df))
+            filtered_df, img_embeddings = df_clipfilter(dlparse_df)
+            print(len(dlparse_df))
+            print(len(filtered_df))
 
-        logging.info("Samples before CLIP {a}".format(a=   len(dlparse_df) ))
-        logging.info("Samples after CLIP {a}".format(a=   len(filtered_df) ))
+            logging.info("Samples before CLIP {a}".format(a=   len(dlparse_df) ))
+            logging.info("Samples after CLIP {a}".format(a=   len(filtered_df) ))
 
-        filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
-        with open(f"{output_folder}image_embedding_dict-{out_fname}.pkl", "wb") as f:
-            pickle.dump(img_embeddings, f)
+            filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
+            with open(f"{output_folder}image_embedding_dict-{out_fname}.pkl", "wb") as f:
+                pickle.dump(img_embeddings, f)
 
-        client.log("Saving TFRs")
-        df_tfrecords(
-            filtered_df,
-            f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord",
-        )
-        upload_gdrive( f"{output_folder}image_embedding_dict-{out_fname}.pkl")
-        upload_gdrive( f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord" )
-        client._markjobasdone(len(filtered_df))
+            client.log("Saving TFRs")
+            df_tfrecords(
+                filtered_df,
+                f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord",
+            )
+            upload_gdrive( f"{output_folder}image_embedding_dict-{out_fname}.pkl")
+            upload_gdrive( output_folder + out_fname + ".csv" )
+            upload_gdrive( f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord" )
+            client._markjobasdone(len(filtered_df))
 
-        print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
+            print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
 
-        logging.info("Job completed {a}".format(a=  round(time.time() - start)))
-
+            logging.info("Job completed {a}".format(a=  round(time.time() - start)))
+        except:
+            continue
    
