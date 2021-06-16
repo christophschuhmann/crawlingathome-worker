@@ -47,7 +47,7 @@ runcmd:
  - sed -i '$a AllowUsers crawl' /etc/ssh/sshd_config
  # install the script
  - cd /home/crawl
- - git clone https://github.com/Wikidepia/crawlingathome-worker
+ - git clone https://github.com/christophschuhmann/crawlingathome-worker
  - cd crawlingathome-worker
  - bash setup.sh
  # make the script run as a service at startup
