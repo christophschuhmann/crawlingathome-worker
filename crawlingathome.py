@@ -669,8 +669,8 @@ if __name__ == "__main__":
         print(len(dlparse_df))
         print(len(filtered_df))
         f = open("log.txt", "a")
-        f.write(str(len(dlparse_df )).encode('utf_8'))
-        f.write(str(len(filtered_df)).encode('utf_8'))
+        f.write(str(len(dlparse_df )))
+        f.write(str(len(filtered_df)))
 
         filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
         with open(f"{output_folder}image_embedding_dict-{out_fname}.pkl", "wb") as f:
