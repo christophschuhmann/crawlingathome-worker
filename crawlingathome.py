@@ -560,24 +560,6 @@ def df_tfrecords(df, output_fname):
             tfrecord_writer.write(example.SerializeToString())
 
 
-
-class FileData:
-    def __init__(self, filename):
-        self._filename = filename
-        self._line_to_position = [0]
-        self._length = 0
-
-        with open(self._filename, 'r') as f:
-            while f.readline():
-                self._line_to_position.append(f.tell())
-                self._length += 1
-    
-    def __getitem__(self, line):
-        return self._line_to_position[line]
-
-    def __len__(self):
-        return self._length
-            
 def upload_gdrive(output_filename):
     import requests
 
@@ -633,13 +615,31 @@ def suppress_stdout():
         finally:
             sys.stdout = old_stdout
 
+class FileData:
+    def __init__(self, filename):
+        self._filename = filename
+        self._line_to_position = [0]
+        self._length = 0
+
+        with open(self._filename, 'r') as f:
+            while f.readline():
+                self._line_to_position.append(f.tell())
+                self._length += 1
+
+    def __getitem__(self, line):
+        return self._line_to_position[line]
+
+    def __len__(self):
+        return self._length
 
 if __name__ == "__main__":
+
     import crawlingathome_client as cah
 
     YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Wikidepia"
     CRAWLINGATHOME_SERVER_URL = "http://178.63.68.247:8181/"
-
+    import logging
+    logging.basicConfig(filename='out.log')
     client = cah.init(
         url=CRAWLINGATHOME_SERVER_URL, nickname=YOUR_NICKNAME_FOR_THE_LEADERBOARD
     )
@@ -664,15 +664,14 @@ if __name__ == "__main__":
         last_sample_id = int(client.end_id)
         shard_of_chunk = client.shard_piece  # TODO
 
+
         fd = FileData('shard.wat')
 
         if shard_of_chunk == 0:
             start_index = fd[0]
         if shard_of_chunk == 1:
             start_index = fd[ int(len(fd)*0.5) ]
-        
         lines = int(len(fd)*0.5)
-        
         out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
         client.log("Processing shard")
         with open("shard.wat", "r") as infile:
@@ -683,14 +682,15 @@ if __name__ == "__main__":
         dlparse_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
 
         print(f"Downloads completed in {round(time.time() - start)} seconds")
+        logging.info("DL completed {a}".format(a=  round(time.time() - start)))
         print("Filtering begins")
 
         filtered_df, img_embeddings = df_clipfilter(dlparse_df)
         print(len(dlparse_df))
         print(len(filtered_df))
-        f = open("log.txt", "a")
-        f.write(str(len(dlparse_df )))
-        f.write(str(len(filtered_df)))
+
+        logging.info("Samples before CLIP {a}".format(a=   len(dlparse_df) ))
+        logging.info("Samples after CLIP {a}".format(a=   len(filtered_df) ))
 
         filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
         with open(f"{output_folder}image_embedding_dict-{out_fname}.pkl", "wb") as f:
@@ -704,7 +704,9 @@ if __name__ == "__main__":
         # upload_gdrive(output_folder + "image_embeddings.pkl")
         # upload_gdrive(output_folder + "images.tfrecord")
         #client._markjobasdone(len(filtered_df))
-        #print(len(filtered_df))
+
         print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
-        f.write(str(time.time()-start).encode('utf_8'))
-        f.close()
+
+        logging.info("Job completed {a}".format(a=  round(time.time() - start)))
+
+   
