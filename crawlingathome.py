@@ -560,6 +560,24 @@ def df_tfrecords(df, output_fname):
             tfrecord_writer.write(example.SerializeToString())
 
 
+
+class FileData:
+    def __init__(self, filename):
+        self._filename = filename
+        self._line_to_position = [0]
+        self._length = 0
+
+        with open(self._filename, 'r') as f:
+            while f.readline():
+                self._line_to_position.append(f.tell())
+                self._length += 1
+    
+    def __getitem__(self, line):
+        return self._line_to_position[line]
+
+    def __len__(self):
+        return self._length
+            
 def upload_gdrive(output_filename):
     import requests
 
