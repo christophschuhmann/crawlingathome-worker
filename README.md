@@ -6,7 +6,7 @@
 
 1. `git clone https://github.com/Wikidepia/crawlingathome-worker/`, to download headless-crawlingathome.
 2. `cd crawlingathome-worker`, to enter the directory.
-3. `python3 -m venv venv && . venv/bin/activate`, to create virtual environment.
+3. `python3 -m venv venv && . venv/bin/activate`, to create virtual environment. (not needed if only deployed on a machine only for this purpose) 
 4. `. setup.sh`, to install dependencies.
 5. `python3 crawlingathome.py`, to start Crawling!
 
@@ -21,4 +21,4 @@
 - [x] Prevent corrupt image to be processed
 - [x] Shard of chunk (it needs to read all WAT file which will be bad for low ram server)
 - [x] Crawling@Home integration
-- [ ] Verify output
+- [x] Verify output
