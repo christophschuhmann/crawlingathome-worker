@@ -670,7 +670,9 @@ if __name__ == "__main__":
             start_index = fd[0]
         if shard_of_chunk == 1:
             start_index = fd[ int(len(fd)*0.5) ]
-            
+        
+        lines = int(len(fd)*0.5)
+        
         out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
         client.log("Processing shard")
         with open("shard.wat", "r") as infile:
