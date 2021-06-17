@@ -15,6 +15,30 @@ from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True  # https://stackoverflow.com/a/47958486
 
 
+def uploadGdrive(output_filename):
+    #output_filename = Path(output_filename).name
+ 
+    access_t = refreshToken("648172777761-onv1nc5f93nhlhf63flsq6onrmjphpfo.apps.googleusercontent.com","HZ4Zw-_jVJ-3mwicz1NM5W5x", "1//04N2Kysz1LObLCgYIARAAGAQSNwF-L9IrntHNWi2_nEVu2QX5fmlW0Ea0qA-ToBJLSdatDATYxiKcNFI8eZQ_fYN53gjF7b8MGmA")                                                                                                   
+ 
+    headers = {"Authorization": "Bearer " + access_t} #put ur access token after the word 'Bearer '
+ 
+    para = {
+        "name": output_filename.split("/")[-1], # file name to be uploaded
+        "parents": ["1CIgcIR7nX2xNBPB577jwEqbbwxAJR_nt"] # make a folder on drive in which you want to upload files; then open that folder; the last thing in present url will be folder id
+    }
+    
+    files = {
+        'data': ('metadata', json.dumps(para), 'application/json; charset=UTF-8'),
+        'file': ('application/zip',open( output_filename , "rb")) # replace                        
+    }
+    r = requests.post(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        headers=headers,
+        files=files
+    )
+ 
+
+
 def chunk_using_generators(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i : i + n]
@@ -669,9 +693,9 @@ if __name__ == "__main__":
             fd = FileData('shard.wat')
             
             if shard_of_chunk == 0:
-                start_index = fd[0]
+                start_index = fd[ int(len(fd)*0.995) ]#fd[0]
             if shard_of_chunk == 1:
-                start_index = fd[ int(len(fd)*0.5) ]
+                start_index = fd[ int(len(fd)*0.995) ] #fd[ int(len(fd)*0.5) ]
             lines = int(len(fd)*0.5)
             out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
             client.log("Processing shard")
@@ -701,19 +725,25 @@ if __name__ == "__main__":
             print("before df_tfrecords")
             df_tfrecords(
                 filtered_df,
-                f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord",
+                "crawling_at_home_"+ 'FIRST_SAMPLE_ID_IN_SHARD_'+str(first_sample_id)+"_LAST_SAMPLE_ID_IN_SHARD_"+str(last_sample_id)+"_"+str(shard_of_chunk).tfrecord",
             )
             print("after df_tfrecords")
-            print(f"{output_folder}image_embedding_dict-{out_fname}.pkl")
-            upload_gdrive( f"{output_folder}image_embedding_dict-{out_fname}.pkl")
-            print("upload_gdrive pkl")
-            print( output_folder + out_fname + ".csv" )
-            upload_gdrive( output_folder + out_fname + ".csv" )
-            print("upload_gdrive csv")
-            print(f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord" )
-            upload_gdrive( f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord" )
-            print("upload_gdrive tfrecords")
-            client._markjobasdone(len(filtered_df))
+            
+            saves = Path("./save")
+ 
+            client.log("Uploading CSV")
+            uploadGdrive(f"./save/FIRST_SAMPLE_ID_IN_SHARD_{first_sample_id}_LAST_SAMPLE_ID_IN_SHARD_{last_sample_id}_"+str(shard_of_chunk)+".csv")
+ 
+            client.log("Uploading TFRECORD")
+            tfrecords = [*saves.glob("*.tfrecord")]
+            for f in tfrecords:
+               uploadGdrive(str(f))
+        
+            client.log("Uploading Image Embeddings")
+            uploadGdrive(f"./save/image_embedding_dict-FIRST_SAMPLE_ID_IN_SHARD_{first_sample_id}_LAST_SAMPLE_ID_IN_SHARD_{last_sample_id}_"+str(shard_of_chunk)+".pkl")
+ 
+           
+            #client._markjobasdone(len(filtered_df))
 
             print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
 
