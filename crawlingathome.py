@@ -290,6 +290,9 @@ def df_clipfilter(df):
 
     c= 0
     for path in img_files:
+        if c%5000 == 0:
+            client.log("Encoding images with CLIP")
+            print("Embbedded images: "+ str(c))
         img_sample_id = img_ids_by_filepath[path]
         image_embedding_dict[img_sample_id] = img_emb_list[c]
 
@@ -302,11 +305,12 @@ def df_clipfilter(df):
     sample_ids_tokenized_texts=[]
 
     text_embedding_list = []
+    client.log("Encoding Texts with CLIP")
     for row_index, row in df.iterrows():
         untokenized_texts.append (str( df.at[row_index,'TEXT']) [:75])
         sample_ids_tokenized_texts.append (df.at[row_index,'SAMPLE_ID'])
         if row_index% batch_size ==0 and row_index >0:
-
+            
             tokenized_texts = clip.tokenize(untokenized_texts).to(device)
             with torch.no_grad():
               text_embeddings = model.encode_text(tokenized_texts)
@@ -711,9 +715,9 @@ if __name__ == "__main__":
             fd = FileData('shard.wat')
             
             if shard_of_chunk == 0:
-                start_index = fd[0]
+                start_index = fd[ int(len(fd)*0.995) ] #fd[0]
             if shard_of_chunk == 1:
-                start_index = fd[ int(len(fd)*0.5) ]
+                start_index =fd[ int(len(fd)*0.995) ] #fd[ int(len(fd)*0.5) ]
             lines = int(len(fd)*0.5)
             out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
             client.log("Processing shard")
@@ -761,7 +765,7 @@ if __name__ == "__main__":
             uploadGdrive(f"./save/image_embedding_dict-FIRST_SAMPLE_ID_IN_SHARD_{first_sample_id}_LAST_SAMPLE_ID_IN_SHARD_{last_sample_id}_"+str(shard_of_chunk)+".pkl")
  
            
-            client._markjobasdone(len(filtered_df))
+            #client._markjobasdone(len(filtered_df))
 
             print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
 
