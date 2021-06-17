@@ -698,13 +698,21 @@ if __name__ == "__main__":
                 pickle.dump(img_embeddings, f)
 
             client.log("Saving TFRs")
+            print("before df_tfrecords")
             df_tfrecords(
                 filtered_df,
                 f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord",
             )
+            print("after df_tfrecords")
+            print(f"{output_folder}image_embedding_dict-{out_fname}.pkl")
             upload_gdrive( f"{output_folder}image_embedding_dict-{out_fname}.pkl")
+            print("upload_gdrive pkl")
+            print( output_folder + out_fname + ".csv" )
             upload_gdrive( output_folder + out_fname + ".csv" )
+            print("upload_gdrive csv")
+            print(f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord" )
             upload_gdrive( f"{output_folder}crawling_at_home_{out_fname}__00000-of-00001.tfrecord" )
+            print("upload_gdrive tfrecords")
             client._markjobasdone(len(filtered_df))
 
             print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
@@ -713,6 +721,13 @@ if __name__ == "__main__":
         
         except Exception as e: # work on python 3.x
             logger.error('Error: '+ str(e))
+            print('Error: '+ str(e))
+            
+            try:
+               client.bye()
+            except:
+                pass
+
             time.sleep(3)
             import crawlingathome_client as cah
 
