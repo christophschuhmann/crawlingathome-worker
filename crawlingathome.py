@@ -710,7 +710,7 @@ if __name__ == "__main__":
             print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
 
             logging.info("Job completed {a}".format(a=  round(time.time() - start)))
-    except:
+        except:
             time.sleep(3)
             import crawlingathome_client as cah
 
