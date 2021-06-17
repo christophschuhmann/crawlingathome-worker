@@ -725,7 +725,7 @@ if __name__ == "__main__":
             print("before df_tfrecords")
             df_tfrecords(
                 filtered_df,
-                "crawling_at_home_"+ 'FIRST_SAMPLE_ID_IN_SHARD_'+str(first_sample_id)+"_LAST_SAMPLE_ID_IN_SHARD_"+str(last_sample_id)+"_"+str(shard_of_chunk).tfrecord"
+                "crawling_at_home_"+ 'FIRST_SAMPLE_ID_IN_SHARD_'+str(first_sample_id)+"_LAST_SAMPLE_ID_IN_SHARD_"+str(last_sample_id)+"_"+str(shard_of_chunk)+".tfrecord"
             )
             print("after df_tfrecords")
             
