@@ -633,7 +633,7 @@ class FileData:
         return self._length
 
 if __name__ == "__main__":
-
+    import time
     import crawlingathome_client as cah
 
     YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris"
@@ -710,6 +710,17 @@ if __name__ == "__main__":
             print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
 
             logging.info("Job completed {a}".format(a=  round(time.time() - start)))
-        except:
+    except:
+            time.sleep(3)
+            import crawlingathome_client as cah
+
+            client = cah.init(
+                url=CRAWLINGATHOME_SERVER_URL, nickname=YOUR_NICKNAME_FOR_THE_LEADERBOARD
+            )
+            output_folder = "./save/"
+            csv_output_folder = output_folder
+            img_output_folder = output_folder + "images/"
+            os.system("ulimit -n 120000")
+            
             continue
    
