@@ -4,7 +4,7 @@
 
 ## Setup
 
-1. `git clone https://github.com/Wikidepia/crawlingathome-worker/`, to download headless-crawlingathome.
+1. `git clone https://github.com/christophschuhmann/crawlingathome-worker, to download headless-crawlingathome.
 2. `cd crawlingathome-worker`, to enter the directory.
 3. `python3 -m venv venv && . venv/bin/activate`, to create virtual environment. (not needed if only deployed on a machine only for this purpose) 
 4. `. setup.sh`, to install dependencies.
