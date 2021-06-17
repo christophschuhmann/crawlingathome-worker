@@ -639,7 +639,7 @@ if __name__ == "__main__":
     YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris"
     CRAWLINGATHOME_SERVER_URL = "http://crawlingathome.duckdns.org/"
     import logging
-    logging.basicConfig(filename='out.log')
+    logging.basicConfig(filename="log.log", level=logging.INFO)
     client = cah.init(
         url=CRAWLINGATHOME_SERVER_URL, nickname=YOUR_NICKNAME_FOR_THE_LEADERBOARD
     )
@@ -658,7 +658,7 @@ if __name__ == "__main__":
             os.mkdir(output_folder)
             os.mkdir(img_output_folder)
             os.mkdir(".tmp")
-
+            logging.info('dirs cleared')
             client.newJob()
             client.downloadShard()
             first_sample_id = int(client.start_id)
@@ -667,7 +667,7 @@ if __name__ == "__main__":
 
 
             fd = FileData('shard.wat')
-
+            
             if shard_of_chunk == 0:
                 start_index = fd[0]
             if shard_of_chunk == 1:
@@ -685,12 +685,12 @@ if __name__ == "__main__":
             print(f"Downloads completed in {round(time.time() - start)} seconds")
             logging.info("DL completed {a}".format(a=  round(time.time() - start)))
             print("Filtering begins")
-
+            logging.info("Samples before CLIP {a}".format(a=   len(dlparse_df) ))
             filtered_df, img_embeddings = df_clipfilter(dlparse_df)
             print(len(dlparse_df))
             print(len(filtered_df))
 
-            logging.info("Samples before CLIP {a}".format(a=   len(dlparse_df) ))
+            
             logging.info("Samples after CLIP {a}".format(a=   len(filtered_df) ))
 
             filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
@@ -710,7 +710,9 @@ if __name__ == "__main__":
             print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
 
             logging.info("Job completed {a}".format(a=  round(time.time() - start)))
-        except:
+        
+        except Exception as e: # work on python 3.x
+            logger.error('Error: '+ str(e))
             time.sleep(3)
             import crawlingathome_client as cah
 
