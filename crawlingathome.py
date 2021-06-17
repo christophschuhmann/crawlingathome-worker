@@ -728,7 +728,7 @@ if __name__ == "__main__":
                 "crawling_at_home_"+ 'FIRST_SAMPLE_ID_IN_SHARD_'+str(first_sample_id)+"_LAST_SAMPLE_ID_IN_SHARD_"+str(last_sample_id)+"_"+str(shard_of_chunk)+".tfrecord"
             )
             print("after df_tfrecords")
-            
+            from pathlib import Path
             saves = Path("./save")
  
             client.log("Uploading CSV")
@@ -750,7 +750,7 @@ if __name__ == "__main__":
             logging.info("Job completed {a}".format(a=  round(time.time() - start)))
         
         except Exception as e: # work on python 3.x
-            logger.error('Error: '+ str(e))
+            logging.error('Error: '+ str(e))
             print('Error: '+ str(e))
             
             try:
