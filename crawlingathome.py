@@ -13,7 +13,25 @@ import ujson
 from PIL import Image, ImageFile, UnidentifiedImageError
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True  # https://stackoverflow.com/a/47958486
+import json, requests
+from pathlib import Path
 
+def refreshToken(client_id, client_secret, refresh_token):
+    params = {
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token
+    }
+
+    authorization_url = "https://www.googleapis.com/oauth2/v4/token"
+
+    r = requests.post(authorization_url, data=params)
+
+    if r.ok:
+        return r.json()['access_token']
+    else:
+        return None
 
 def uploadGdrive(output_filename):
     #output_filename = Path(output_filename).name
