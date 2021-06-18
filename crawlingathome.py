@@ -682,7 +682,7 @@ if __name__ == "__main__":
     import time
     import crawlingathome_client as cah
 
-    YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris"
+    YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris - CX11 with 2GB SWAP"
     CRAWLINGATHOME_SERVER_URL = "http://crawlingathome.duckdns.org/"
     import logging
     logging.basicConfig(filename="log.log", level=logging.INFO)
