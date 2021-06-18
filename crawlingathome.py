@@ -684,6 +684,7 @@ class FileData:
 if __name__ == "__main__":
     import time
     import crawlingathome_client as cah
+    import numpy as np
 
     YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris"
     CRAWLINGATHOME_SERVER_URL = "http://crawlingathome.duckdns.org/"
@@ -743,6 +744,10 @@ if __name__ == "__main__":
             logging.info("Samples after CLIP {a}".format(a=   len(filtered_df) ))
 
             filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
+            
+            for key in image_embedding_dict:
+                img_embeddings[key] = img_embeddings[key].cpu().detach().numpy()
+                
             with open(f"{output_folder}image_embedding_dict-{out_fname}.pkl", "wb") as f:
                 pickle.dump(img_embeddings, f)
 
@@ -765,6 +770,7 @@ if __name__ == "__main__":
                uploadGdrive(str(f))
         
             client.log("Uploading Image Embeddings")
+
             uploadGdrive(f"./save/image_embedding_dict-FIRST_SAMPLE_ID_IN_SHARD_{first_sample_id}_LAST_SAMPLE_ID_IN_SHARD_{last_sample_id}_"+str(shard_of_chunk)+".pkl")
  
            
