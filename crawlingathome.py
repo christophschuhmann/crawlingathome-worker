@@ -685,7 +685,7 @@ if __name__ == "__main__":
     import time
     import crawlingathome_client as cah
 
-    YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris - CX11 with 2GB SWAP"
+    YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris"
     CRAWLINGATHOME_SERVER_URL = "http://crawlingathome.duckdns.org/"
     import logging
     logging.basicConfig(filename="log.log", level=logging.INFO)
@@ -718,9 +718,9 @@ if __name__ == "__main__":
             fd = FileData('shard.wat')
             
             if shard_of_chunk == 0:
-                start_index =  fd[ int(len(fd)*0.995) ]#fd[0]
+                start_index =  fd[0]
             if shard_of_chunk == 1:
-                start_index =  fd[ int(len(fd)*0.995) ]# fd[ int(len(fd)*0.5) ]
+                start_index =   fd[ int(len(fd)*0.5) ]
             lines = int(len(fd)*0.5)
             out_fname = f"FIRST_SAMPLE_ID_IN_SHARD_{str(first_sample_id)}_LAST_SAMPLE_ID_IN_SHARD_{str(last_sample_id)}_{shard_of_chunk}"
             client.log("Processing shard")
@@ -768,7 +768,7 @@ if __name__ == "__main__":
             uploadGdrive(f"./save/image_embedding_dict-FIRST_SAMPLE_ID_IN_SHARD_{first_sample_id}_LAST_SAMPLE_ID_IN_SHARD_{last_sample_id}_"+str(shard_of_chunk)+".pkl")
  
            
-            #client._markjobasdone(len(filtered_df))
+            client._markjobasdone(len(filtered_df))
 
             print(f"[crawling@home] jobs completed in {round(time.time() - start)} seconds")
 
