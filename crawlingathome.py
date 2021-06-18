@@ -201,6 +201,7 @@ def process_img_content(response, alt_text, license, sample_id):
             os.remove(out_fname)
         return
     width, height = pil_image.size
+    pil_image.close()
     return [str(sample_id), out_fname, response.url, alt_text, width, height, license]
 
 
