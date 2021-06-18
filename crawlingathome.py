@@ -572,6 +572,7 @@ def df_clipfilter(df):
 
 def df_tfrecords(df, output_fname):
     import tensorflow as tf
+    import os
     from tfr_image.utils import bytes_feature, int64_feature
 
     def image_to_tfexample(sample_id, image_data, image_format, height, width, caption):
@@ -604,6 +605,7 @@ def df_tfrecords(df, output_fname):
                 df_image["TEXT"].encode("utf_8"),
             )
             tfrecord_writer.write(example.SerializeToString())
+            os.remove(image_fname)
 
 
 def upload_gdrive(output_filename):
