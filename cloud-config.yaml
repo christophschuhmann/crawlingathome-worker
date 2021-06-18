@@ -15,7 +15,7 @@ runcmd:
  - [ sh, -c, echo "=========hello crawl'=========" ]
  - ls -l /root
  # make swap file so tensorflow and pytorch can install
- - fallocate -l 5G /swapfile
+ - fallocate -l 2G /swapfile
  - chmod 600 /swapfile
  - mkswap /swapfile
  - swapon /swapfile
