@@ -772,7 +772,7 @@ if __name__ == "__main__":
             client.log("Uploading Image Embeddings")
             pkls = [*saves.glob("*.pkl")]
             for f in pkls:
-                print(f)
+               print(f)
                uploadGdrive(str(f))
            
             #uploadGdrive(f"./save/image_embedding_dict-FIRST_SAMPLE_ID_IN_SHARD_{first_sample_id}_LAST_SAMPLE_ID_IN_SHARD_{last_sample_id}_"+str(shard_of_chunk)+".pkl")
