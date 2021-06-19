@@ -745,10 +745,10 @@ if __name__ == "__main__":
 
             filtered_df.to_csv(output_folder + out_fname + ".csv", index=False, sep="|")
             
-            for key in image_embedding_dict:
+            for key in img_embeddings:
                 img_embeddings[key] = img_embeddings[key].cpu().detach().numpy()
                 
-            with open(f"{output_folder}image_embedding_dict-{out_fname}.pkl", "wb") as f:
+            with open(f"{output_folder}img_embeddings-{out_fname}.pkl", "wb") as f:
                 pickle.dump(img_embeddings, f)
 
             client.log("Saving TFRs")
