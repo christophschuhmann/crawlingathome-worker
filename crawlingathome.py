@@ -687,7 +687,7 @@ if __name__ == "__main__":
     import numpy as np
 
     YOUR_NICKNAME_FOR_THE_LEADERBOARD = "Kris"
-    CRAWLINGATHOME_SERVER_URL = "http://crawlingathome.duckdns.org/"
+    CRAWLINGATHOME_SERVER_URL = "https://api.gagepiracy.com:4483/"
     import logging
     logging.basicConfig(filename="log.log", level=logging.INFO)
     client = cah.init(
